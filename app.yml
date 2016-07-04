@@ -13,5 +13,10 @@ handlers:
     static_files: static/javascript/\1
     upload: static/(.*\.js)
 
+  - url: /(.*\.css)
+    static_files: static/css/\1
+    upload: static/(.*\.css)
+
   - url: /.*
-    script: errors.py
+    static_files: static/404.html
+    upload: static/404.html
