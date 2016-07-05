@@ -12,4 +12,4 @@ deployment:
   staging:
     branch: master
     commands:
-        - glcoud -q preview app deploy app.yml --promote --project=$GCLOUD_PROJECT
+        - gcloud -q preview app deploy app.yml --promote --project=$GCLOUD_PROJECT
