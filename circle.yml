@@ -7,10 +7,9 @@ dependencies:
     - echo $CLIENT_SECRET | base64 --decode > ${HOME}/client-secret.json
     - gcloud --quiet components update app
     - gcloud auth activate-service-account --key-file ${HOME}/client-secret.json
-    - gcloud config set project $GCLOUD_PROJECT
 
 deployment:
   staging:
     branch: master
     commands:
-    - glcoud -q preview app deploy app.yml --promote --version=v1
+        - glcoud -q preview app deploy app.yml --promote --project=$GCLOUD_PROJECT
