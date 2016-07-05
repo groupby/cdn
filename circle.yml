@@ -4,9 +4,10 @@ machine:
 
 dependencies:
   pre:
+    - curl -o ${HOME}/cloud-sdk.tar.gz https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-116.0.0-linux-x86_64.tar.gz
+    - tar -C ${HOME}/cloud-sdk -xvf ${HOME}/cloud-sdk.tar.gz
     - echo $CLIENT_SECRET | base64 --decode > ${HOME}/client-secret.json
-    - sudo gcloud --quiet components update
-    - gcloud auth activate-service-account --key-file ${HOME}/client-secret.json
+    - ${HOME}/cloud-sdk/bin/gcloud auth activate-service-account --key-file ${HOME}/client-secret.json
 
 deployment:
   staging:
