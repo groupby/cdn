@@ -18,4 +18,4 @@ deployment:
   staging:
     branch: master
     commands:
-        - ${HOME}/google-cloud-sdk/bin/gcloud -q preview app deploy app.yml --promote --version=v1 --project=$GCLOUD_PROJECT
+        - ${HOME}/google-cloud-sdk/bin/gcloud -q preview app deploy app.yml --promote --project=$GCLOUD_PROJECT
