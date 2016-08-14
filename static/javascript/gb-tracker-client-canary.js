@@ -62,29 +62,32 @@
 	var uuid                 = __webpack_require__(3);
 	var diff                 = __webpack_require__(5).diff;
 	var inspector            = __webpack_require__(6);
-	var addToBasketSchemas   = {
-	  validation:   __webpack_require__(11),
-	  sanitization: __webpack_require__(12)
-	};
-	var navigationSchemas    = {
-	  validation:   __webpack_require__(13),
-	  sanitization: __webpack_require__(14)
-	};
-	var orderSchemas         = {
-	  validation:   __webpack_require__(15),
-	  sanitization: __webpack_require__(16)
-	};
-	var searchSchemas        = {
-	  validation:   __webpack_require__(17),
-	  sanitization: __webpack_require__(18)
-	};
-	var sessionChangeSchemas = {
-	  validation:   __webpack_require__(19),
-	  sanitization: __webpack_require__(20)
-	};
-	var viewProductSchemas   = {
-	  validation:   __webpack_require__(21),
-	  sanitization: __webpack_require__(22)
+
+	var SCHEMAS = {
+	  addToBasket: {
+	    validation:   __webpack_require__(11),
+	    sanitization: __webpack_require__(12)
+	  },
+	  navigation: {
+	    validation:   __webpack_require__(13),
+	    sanitization: __webpack_require__(14)
+	  },
+	  order: {
+	    validation:   __webpack_require__(15),
+	    sanitization: __webpack_require__(16)
+	  },
+	  search: {
+	    validation:   __webpack_require__(17),
+	    sanitization: __webpack_require__(18)
+	  },
+	  sessionChange: {
+	    validation:   __webpack_require__(19),
+	    sanitization: __webpack_require__(20)
+	  },
+	  viewProduct: {
+	    validation:   __webpack_require__(21),
+	    sanitization: __webpack_require__(22)
+	  }
 	};
 
 	// Info on path length limitations: http://stackoverflow.com/a/812962
@@ -96,9 +99,10 @@
 	var overridenPixelPath = null;
 
 	var Tracker = function (customerId, area) {
-	  var self     = this;
-	  var customer = {};
-	  var visit    = {customerData: {}};
+	  var self                 = this;
+	  var customer             = {};
+	  var visit                = {customerData: {}};
+	  var invalidEventCallback = null;
 
 	  var MAX_PATH_LENGTH         = (getInternetExplorerVersion() > -1) ? MAX_IE_PATH_LENGTH : MAX_OTHER_PATH_LENGTH;
 	  var MAX_QUERY_STRING_LENGTH = MAX_PATH_LENGTH - MAX_PATHNAME_LENGTH;
@@ -119,12 +123,15 @@
 	   * @param sessionId
 	   */
 	  self.setVisitor = function (visitorId, sessionId) {
-	    if (visitorId === undefined || visitorId === null) {
-	      throw new Error('visitorId must be set');
+	    visitorId = (visitorId && typeof visitorId === 'number') ? (visitorId + '') : visitorId;
+	    sessionId = (sessionId && typeof sessionId === 'number') ? (sessionId + '') : sessionId;
+
+	    if (typeof visitorId !== 'string') {
+	      throw new Error('visitorId must be a string with length');
 	    }
 
-	    if (sessionId === undefined || sessionId === null) {
-	      throw new Error('sessionId must be set');
+	    if (typeof sessionId !== 'string') {
+	      throw new Error('sessionId must be a string with length');
 	    }
 
 	    var prevVisitorId = visit.customerData.visitorId;
@@ -134,12 +141,18 @@
 	    visit.customerData.sessionId = sessionId;
 
 	    if (prevVisitorId !== visitorId || prevSessionId !== sessionId) {
-	      self.__private.sendSessionChangeEvent({
-	        previousSessionId: visit.customerData.sessionId,
-	        previousVisitorId: visit.customerData.visitorId,
-	        newSessionId:      visit.customerData.sessionId,
-	        newVisitorId:      visit.customerData.visitorId
-	      });
+	      var sessionEvent = {
+	        newSessionId: visit.customerData.sessionId,
+	        newVisitorId: visit.customerData.visitorId
+	      };
+
+	      // There may not be a previous session (initial site load)
+	      if (prevVisitorId) {
+	        sessionEvent.previousVisitorId = prevVisitorId;
+	        sessionEvent.previousSessionId = prevSessionId;
+	      }
+
+	      self.__private.sendSessionChangeEvent({session: sessionEvent});
 	    }
 	  };
 
@@ -159,16 +172,25 @@
 	    return event;
 	  };
 
+
+	  /**
+	   * Set callback to be notified of invalid events
+	   * @param callback
+	   */
+	  self.setInvalidEventCallback = function (callback) {
+	    if (typeof callback !== 'function') {
+	      throw new Error('invalid event callback must be a function');
+	    }
+
+	    invalidEventCallback = callback;
+	  };
+
 	  /**
 	   * Validate and send addToBasket event
 	   * @param event
 	   */
 	  self.sendAddToBasketEvent = function (event) {
-	    event = prepareEvent(event, 'addToBasket');
-	    event = self.__private.validateEvent(event, addToBasketSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'addToBasket');
 	  };
 
 	  /**
@@ -176,11 +198,7 @@
 	   * @param event
 	   */
 	  self.sendOrderEvent = function (event) {
-	    event = prepareEvent(event, 'order');
-	    event = self.__private.validateEvent(event, orderSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'order');
 	  };
 
 	  /**
@@ -188,11 +206,7 @@
 	   * @param event
 	   */
 	  self.sendSearchEvent = function (event) {
-	    event = prepareEvent(event, 'search');
-	    event = self.__private.validateEvent(event, searchSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'search');
 	  };
 
 	  /**
@@ -200,14 +214,33 @@
 	   * @param event
 	   */
 	  self.sendViewProductEvent = function (event) {
-	    event = prepareEvent(event, 'viewProduct');
-	    event = self.__private.validateEvent(event, viewProductSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'viewProduct');
 	  };
 
 	  self.__private = {};
+
+	  /**
+	   * Helper to prepare, validate, and send event
+	   * @param event
+	   * @param eventType
+	   */
+	  self.__private.prepareAndSendEvent = function(event, eventType) {
+	    event = prepareEvent(event, eventType);
+	    var validatedEvent = self.__private.validateEvent(event, SCHEMAS[eventType]);
+	    if (validatedEvent) {
+	      self.__private.sendEvent(validatedEvent, self.__private.sendSegment);
+	    } else {
+	      invalidEventCallback && invalidEventCallback(event);
+	    }
+	  };
+
+	  /**
+	   * Visitor getter for testing
+	   * @returns {{customerData: {}}}
+	   */
+	  self.__private.getVisitor = function () {
+	    return visit;
+	  };
 
 	  /**
 	   * Attach navigation listeners for page enter/leave and hash changes
@@ -266,11 +299,7 @@
 	   * @param event
 	   */
 	  self.__private.sendNavigationEvent = function (event) {
-	    event = prepareEvent(event, 'navigation');
-	    event = self.__private.validateEvent(event, navigationSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'navigation');
 	  };
 
 	  /**
@@ -278,11 +307,7 @@
 	   * @param event
 	   */
 	  self.__private.sendSessionChangeEvent = function (event) {
-	    event = prepareEvent(event, 'sessionChange');
-	    event = self.__private.validateEvent(event, sessionChangeSchemas);
-	    if (event) {
-	      self.__private.sendEvent(event, self.__private.sendSegment);
-	    }
+	    self.__private.prepareAndSendEvent(event, 'sessionChange');
 	  };
 
 	  /**
@@ -4330,99 +4355,6 @@
 							}
 						},
 						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
-								"optional": true
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -4493,58 +4425,6 @@
 							"sessionId": {}
 						},
 						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -4607,99 +4487,6 @@
 							}
 						},
 						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
-								"optional": true
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -4747,58 +4534,6 @@
 						"properties": {
 							"visitorId": {},
 							"sessionId": {}
-						},
-						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
 						},
 						"strict": true
 					}
@@ -4891,99 +4626,6 @@
 							}
 						},
 						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
-								"optional": true
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -5056,58 +4698,6 @@
 						"properties": {
 							"visitorId": {},
 							"sessionId": {}
-						},
-						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
 						},
 						"strict": true
 					}
@@ -5437,99 +5027,6 @@
 							},
 							"sessionId": {
 								"type": "string",
-								"optional": true
-							}
-						},
-						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
 								"optional": true
 							}
 						},
@@ -6020,58 +5517,6 @@
 							"sessionId": {}
 						},
 						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -6246,13 +5691,15 @@
 				"type": "object",
 				"properties": {
 					"previousSessionId": {
-						"type": "string"
+						"type": "string",
+						"optional": true
 					},
 					"newSessionId": {
 						"type": "string"
 					},
 					"previousVisitorId": {
-						"type": "string"
+						"type": "string",
+						"optional": true
 					},
 					"newVisitorId": {
 						"type": "string"
@@ -6272,99 +5719,6 @@
 							},
 							"sessionId": {
 								"type": "string",
-								"optional": true
-							}
-						},
-						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
 								"optional": true
 							}
 						},
@@ -6405,9 +5759,13 @@
 			},
 			"session": {
 				"properties": {
-					"previousSessionId": {},
+					"previousSessionId": {
+						"optional": true
+					},
 					"newSessionId": {},
-					"previousVisitorId": {},
+					"previousVisitorId": {
+						"optional": true
+					},
 					"newVisitorId": {}
 				},
 				"strict": true
@@ -6418,58 +5776,6 @@
 						"properties": {
 							"visitorId": {},
 							"sessionId": {}
-						},
-						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
 						},
 						"strict": true
 					}
@@ -6556,99 +5862,6 @@
 							}
 						},
 						"strict": true
-					},
-					"generated": {
-						"type": "object",
-						"properties": {
-							"visitorCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"sessionCookieId": {
-								"type": "string",
-								"optional": true
-							},
-							"userAgentString": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUserAgent": {
-								"type": "object",
-								"optional": true
-							},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {
-											"type": "string",
-											"optional": true
-										},
-										"language": {
-											"type": "string",
-											"optional": true
-										},
-										"region": {
-											"type": "string",
-											"optional": true
-										},
-										"quality": {
-											"type": "number",
-											"optional": true
-										}
-									},
-									"strict": true
-								},
-								"optional": true
-							},
-							"ip": {
-								"type": "string",
-								"optional": true
-							},
-							"geo": {
-								"type": "object",
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true,
-								"optional": true
-							},
-							"uri": {
-								"type": "string",
-								"optional": true
-							},
-							"parsedUri": {
-								"type": "object",
-								"optional": true
-							},
-							"referer": {
-								"type": "object",
-								"optional": true
-							},
-							"serverTime": {
-								"type": "date",
-								"optional": true
-							},
-							"localTime": {
-								"type": "date",
-								"optional": true
-							},
-							"timezoneOffset": {
-								"type": "integer",
-								"optional": true
-							}
-						},
-						"strict": true
 					}
 				},
 				"strict": true
@@ -6714,58 +5927,6 @@
 						"properties": {
 							"visitorId": {},
 							"sessionId": {}
-						},
-						"strict": true
-					},
-					"generated": {
-						"properties": {
-							"visitorCookieId": {},
-							"sessionCookieId": {},
-							"userAgentString": {},
-							"parsedUserAgent": {},
-							"language": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"value": {},
-										"language": {},
-										"region": {},
-										"quality": {
-											"type": "number"
-										}
-									},
-									"strict": true
-								}
-							},
-							"ip": {},
-							"geo": {
-								"properties": {
-									"location": {
-										"properties": {
-											"lat": {
-												"type": "double"
-											},
-											"lon": {
-												"type": "double"
-											}
-										}
-									}
-								},
-								"strict": true
-							},
-							"uri": {},
-							"parsedUri": {},
-							"referer": {},
-							"serverTime": {
-								"type": "date"
-							},
-							"localTime": {
-								"type": "date"
-							},
-							"timezoneOffset": {
-								"type": "integer"
-							}
 						},
 						"strict": true
 					}
