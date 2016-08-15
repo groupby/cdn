@@ -59,34 +59,39 @@
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var uuid                 = __webpack_require__(3);
-	var diff                 = __webpack_require__(5).diff;
-	var inspector            = __webpack_require__(6);
+	var uuid      = __webpack_require__(3);
+	var diff      = __webpack_require__(5).diff;
+	var inspector = __webpack_require__(6);
+	var utils = __webpack_require__(11);
 
 	var SCHEMAS = {
 	  addToBasket: {
-	    validation:   __webpack_require__(11),
-	    sanitization: __webpack_require__(12)
+	    validation:   __webpack_require__(12),
+	    sanitization: __webpack_require__(13)
 	  },
 	  navigation: {
-	    validation:   __webpack_require__(13),
-	    sanitization: __webpack_require__(14)
+	    validation:   __webpack_require__(14),
+	    sanitization: __webpack_require__(15)
 	  },
 	  order: {
-	    validation:   __webpack_require__(15),
-	    sanitization: __webpack_require__(16)
+	    validation:   __webpack_require__(16),
+	    sanitization: __webpack_require__(17)
 	  },
-	  search: {
-	    validation:   __webpack_require__(17),
-	    sanitization: __webpack_require__(18)
+	  searchWithId: {
+	    validation:   __webpack_require__(18),
+	    sanitization: __webpack_require__(19)
+	  },
+	  searchWithoutId: {
+	    validation:   __webpack_require__(20),
+	    sanitization: __webpack_require__(21)
 	  },
 	  sessionChange: {
-	    validation:   __webpack_require__(19),
-	    sanitization: __webpack_require__(20)
+	    validation:   __webpack_require__(22),
+	    sanitization: __webpack_require__(23)
 	  },
 	  viewProduct: {
-	    validation:   __webpack_require__(21),
-	    sanitization: __webpack_require__(22)
+	    validation:   __webpack_require__(24),
+	    sanitization: __webpack_require__(25)
 	  }
 	};
 
@@ -104,7 +109,7 @@
 	  var visit                = {customerData: {}};
 	  var invalidEventCallback = null;
 
-	  var MAX_PATH_LENGTH         = (getInternetExplorerVersion() > -1) ? MAX_IE_PATH_LENGTH : MAX_OTHER_PATH_LENGTH;
+	  var MAX_PATH_LENGTH         = (utils.getInternetExplorerVersion(navigator.appCodeName, navigator.userAgent) > -1) ? MAX_IE_PATH_LENGTH : MAX_OTHER_PATH_LENGTH;
 	  var MAX_QUERY_STRING_LENGTH = MAX_PATH_LENGTH - MAX_PATHNAME_LENGTH;
 
 	  if (typeof customerId !== 'string' || customerId.length === 0) {
@@ -206,7 +211,11 @@
 	   * @param event
 	   */
 	  self.sendSearchEvent = function (event) {
-	    self.__private.prepareAndSendEvent(event, 'search');
+	    if (event.searchId || (event.search && event.search.searchId)) {
+	      self.__private.prepareAndSendEvent(event, 'searchWithId');
+	    } else {
+	      self.__private.prepareAndSendEvent(event, 'searchWithoutId');
+	    }
 	  };
 
 	  /**
@@ -224,13 +233,13 @@
 	   * @param event
 	   * @param eventType
 	   */
-	  self.__private.prepareAndSendEvent = function(event, eventType) {
+	  self.__private.prepareAndSendEvent = function (event, eventType) {
 	    event = prepareEvent(event, eventType);
-	    var validatedEvent = self.__private.validateEvent(event, SCHEMAS[eventType]);
-	    if (validatedEvent) {
-	      self.__private.sendEvent(validatedEvent, self.__private.sendSegment);
+	    var validated = self.__private.validateEvent(event, SCHEMAS[eventType]);
+	    if (validated && validated.event) {
+	      self.__private.sendEvent(validated.event, self.__private.sendSegment);
 	    } else {
-	      invalidEventCallback && invalidEventCallback(event);
+	      invalidEventCallback && invalidEventCallback(event, validated.error);
 	    }
 	  };
 
@@ -314,16 +323,15 @@
 	   * Based on the schema provided, validate an event for sending to the tracker endpoint
 	   * @param event
 	   * @param schemas
-	   * @returns {null}
 	   */
 	  self.__private.validateEvent = function (event, schemas) {
-	    var sanitizedEvent = deepCopy(event);
+	    var sanitizedEvent = utils.deepCopy(event);
 	    inspector.sanitize(schemas.sanitization, sanitizedEvent);
 	    var result = inspector.validate(schemas.validation, sanitizedEvent);
 
 	    if (!result.valid) {
 	      console.error('error while processing event: ' + result.format());
-	      return null;
+	      return {event: null, error: result.format()};
 	    }
 
 	    if (!sanitizedEvent.visit) {
@@ -346,7 +354,7 @@
 	    sanitizedEvent.visit.generated.timezoneOffset = new Date().getTimezoneOffset();
 	    sanitizedEvent.visit.generated.localTime = new Date().toISOString();
 
-	    return sanitizedEvent;
+	    return {event: sanitizedEvent};
 	  };
 
 	  /**
@@ -385,7 +393,7 @@
 	    };
 
 	    var SEGMENT_WRAPPER_OVERHEAD = encodeURIComponent(JSON.stringify(segmentTemplate)).length;
-	    var eventStringSegments      = chunkString(encodeURIComponent(eventString), MAX_QUERY_STRING_LENGTH - SEGMENT_WRAPPER_OVERHEAD);
+	    var eventStringSegments      = utils.chunkString(encodeURIComponent(eventString), MAX_QUERY_STRING_LENGTH - SEGMENT_WRAPPER_OVERHEAD);
 
 	    if (eventStringSegments.length > MAX_SEGMENT_COUNT) {
 	      console.error('cannot send: ' + eventStringSegments + ' event segments, as that exceeds the max of: ' + MAX_SEGMENT_COUNT);
@@ -428,84 +436,6 @@
 	    }
 	  };
 
-	};
-
-	/**
-	 * Helper to split string by length
-	 * @param str
-	 * @param len
-	 * @returns {Array}
-	 */
-	var chunkString = function (str, len) {
-	  var size   = Math.ceil(str.length / len);
-	  var ret    = new Array(size);
-	  var offset = null;
-
-	  for (var i = 0; i < size; i++) {
-	    offset = i * len;
-	    ret[i] = str.substring(offset, offset + len);
-	  }
-
-	  return ret;
-	};
-
-	/**
-	 * Helper to deep copy an object
-	 * @param o
-	 */
-	var deepCopy = function (o) {
-	  if (o === undefined || o === null) {
-	    return null;
-	  }
-	  return JSON.parse(JSON.stringify(o));
-	};
-
-	/**
-	 * Recursively merge object, giving the last one precedence
-	 * @param target
-	 * @param source
-	 * @returns {*}
-	 */
-	var merge = function (target, source) {
-	  if (typeof target !== 'object') {
-	    target = {};
-	  }
-
-	  for (var property in source) {
-	    if (source.hasOwnProperty(property)) {
-	      var sourceProperty = source[property];
-
-	      if (typeof sourceProperty === 'object') {
-	        target[property] = merge(target[property], sourceProperty);
-	        continue;
-	      }
-
-	      target[property] = sourceProperty;
-	    }
-	  }
-
-	  for (var a = 2, l = arguments.length; a < l; a++) {
-	    merge(target, arguments[a]);
-	  }
-
-	  return target;
-	};
-
-
-	/**
-	 * Returns the version of Internet Explorer or a -1
-	 * (indicating the use of another browser).
-	 * @returns {number}
-	 */
-	var getInternetExplorerVersion = function () {
-	  var rv = -1; // Return value assumes failure.
-	  if (navigator.appName == 'Microsoft Internet Explorer') {
-	    var ua = navigator.userAgent;
-	    var re = new RegExp('MSIE ([0-9]{1,}[\.0-9]{0,})');
-	    if (re.exec(ua) != null)
-	      rv = parseFloat(RegExp.$1);
-	  }
-	  return rv;
 	};
 
 	Tracker.__overridePixelPath = function (path) {
@@ -4283,6 +4213,95 @@
 /* 11 */
 /***/ function(module, exports) {
 
+	/**
+	 * Helper to split string by length
+	 * @param str
+	 * @param len
+	 * @returns {Array}
+	 */
+	var chunkString = function (str, len) {
+	  var size   = Math.ceil(str.length / len);
+	  var ret    = new Array(size);
+	  var offset = null;
+
+	  for (var i = 0; i < size; i++) {
+	    offset = i * len;
+	    ret[i] = str.substring(offset, offset + len);
+	  }
+
+	  return ret;
+	};
+
+	/**
+	 * Helper to deep copy an object
+	 * @param o
+	 */
+	var deepCopy = function (o) {
+	  if (o === undefined || o === null) {
+	    return null;
+	  }
+	  return JSON.parse(JSON.stringify(o));
+	};
+
+	/**
+	 * Recursively merge object, giving the last one precedence
+	 * @param target
+	 * @param source
+	 * @returns {*}
+	 */
+	var merge = function (target, source) {
+	  if (typeof target !== 'object') {
+	    target = {};
+	  }
+
+	  for (var property in source) {
+	    if (source.hasOwnProperty(property)) {
+	      var sourceProperty = source[property];
+
+	      if (typeof sourceProperty === 'object') {
+	        target[property] = merge(target[property], sourceProperty);
+	        continue;
+	      }
+
+	      target[property] = sourceProperty;
+	    }
+	  }
+
+	  for (var a = 2, l = arguments.length; a < l; a++) {
+	    merge(target, arguments[a]);
+	  }
+
+	  return target;
+	};
+
+
+	/**
+	 * Returns the version of Internet Explorer or a -1
+	 * (indicating the use of another browser).
+	 * @returns {number}
+	 */
+	var getInternetExplorerVersion = function (navigatorAppName, userAgent) {
+	  var rv = -1; // Return value assumes failure.
+	  if (navigatorAppName == 'Microsoft Internet Explorer') {
+	    var ua = userAgent;
+	    var re = new RegExp('MSIE ([0-9]{1,}[\.0-9]{0,})');
+	    if (re.exec(ua) != null)
+	      rv = parseFloat(RegExp.$1);
+	  }
+	  return rv;
+	};
+
+	module.exports = {
+	  chunkString:                chunkString,
+	  deepCopy:                   deepCopy,
+	  merge:                      merge,
+	  getInternetExplorerVersion: getInternetExplorerVersion
+	};
+
+/***/ },
+/* 12 */
+/***/ function(module, exports) {
+
 	module.exports = {
 		"type": "object",
 		"properties": {
@@ -4373,7 +4392,7 @@
 	};
 
 /***/ },
-/* 12 */
+/* 13 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4437,7 +4456,7 @@
 	};
 
 /***/ },
-/* 13 */
+/* 14 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4505,7 +4524,7 @@
 	};
 
 /***/ },
-/* 14 */
+/* 15 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4548,7 +4567,7 @@
 	};
 
 /***/ },
-/* 15 */
+/* 16 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4644,7 +4663,7 @@
 	};
 
 /***/ },
-/* 16 */
+/* 17 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4712,7 +4731,7 @@
 	};
 
 /***/ },
-/* 17 */
+/* 18 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -4737,23 +4756,9 @@
 			"search": {
 				"type": "object",
 				"properties": {
-					"searchUuid": {
-						"type": "string"
-					},
-					"totalRecordCount": {
-						"type": "integer"
-					},
-					"pageInfo": {
-						"type": "object",
-						"properties": {
-							"recordStart": {
-								"type": "integer"
-							},
-							"recordEnd": {
-								"type": "integer"
-							}
-						},
-						"strict": true
+					"searchId": {
+						"type": "string",
+						"optional": false
 					},
 					"origin": {
 						"type": "object",
@@ -4776,241 +4781,6 @@
 							}
 						},
 						"strict": true
-					},
-					"selectedRefinements": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"name": {
-									"type": "string",
-									"optional": true
-								},
-								"displayName": {
-									"type": "string"
-								},
-								"range": {
-									"type": "boolean",
-									"optional": true
-								},
-								"or": {
-									"type": "boolean",
-									"optional": false
-								},
-								"refinements": {
-									"type": "array",
-									"items": {
-										"type": "object",
-										"properties": {
-											"value": {
-												"type": "string",
-												"optional": true
-											},
-											"count": {
-												"type": "integer"
-											},
-											"type": {
-												"type": "string"
-											},
-											"low": {
-												"type": "number",
-												"optional": true
-											},
-											"high": {
-												"type": "number",
-												"optional": true
-											}
-										},
-										"strict": true
-									}
-								}
-							},
-							"strict": true
-						}
-					},
-					"searchTerm": {
-						"type": "string"
-					},
-					"rawSearchResults": {
-						"type": "object",
-						"properties": {
-							"totalRecordCount": {
-								"type": "integer"
-							},
-							"area": {
-								"type": "string"
-							},
-							"biasingProfile": {
-								"type": "string"
-							},
-							"query": {
-								"type": "string"
-							},
-							"originalQuery": {
-								"type": "string"
-							},
-							"template": {
-								"type": "object",
-								"properties": {
-									"name": {
-										"type": "string"
-									}
-								},
-								"strict": true
-							},
-							"pageInfo": {
-								"type": "object",
-								"properties": {
-									"recordStart": {
-										"type": "integer"
-									},
-									"recordEnd": {
-										"type": "integer"
-									}
-								},
-								"strict": true
-							},
-							"matchStrategy": {
-								"type": "object",
-								"properties": {
-									"rules": {
-										"type": "object",
-										"properties": {
-											"termsGreaterThan": {
-												"type": "integer"
-											},
-											"mustMatch": {
-												"type": "integer"
-											},
-											"percentage": {
-												"type": "boolean"
-											}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"availableNavigation": {
-								"type": "object",
-								"properties": {
-									"name": {
-										"type": "string"
-									},
-									"displayName": {
-										"type": "string"
-									},
-									"range": {
-										"type": "boolean"
-									},
-									"or": {
-										"type": "boolean"
-									},
-									"metadata": {
-										"type": "object",
-										"properties": {
-											"key": {
-												"type": "string"
-											},
-											"name": {
-												"type": "string"
-											}
-										},
-										"strict": true
-									},
-									"refinements": {
-										"type": "object",
-										"properties": {
-											"type": {
-												"type": "string"
-											},
-											"count": {
-												"type": "integer"
-											},
-											"value": {
-												"type": "string"
-											},
-											"high": {
-												"type": "string"
-											},
-											"low": {
-												"type": "string"
-											}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"selectedNavigation": {
-								"type": "object",
-								"properties": {
-									"name": {
-										"type": "string"
-									},
-									"displayName": {
-										"type": "string"
-									},
-									"range": {
-										"type": "boolean"
-									},
-									"or": {
-										"type": "boolean"
-									},
-									"metadata": {
-										"type": "object",
-										"properties": {
-											"key": {
-												"type": "string"
-											},
-											"name": {
-												"type": "string"
-											}
-										},
-										"strict": true
-									},
-									"refinements": {
-										"type": "object",
-										"properties": {
-											"name": {
-												"type": "string"
-											},
-											"count": {
-												"type": "integer"
-											},
-											"value": {
-												"type": "string"
-											}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"records": {
-								"type": "object",
-								"properties": {
-									"allMeta": {
-										"type": "object"
-									},
-									"_id": {
-										"type": "string"
-									},
-									"_u": {
-										"type": "string"
-									},
-									"_t": {
-										"type": "string"
-									}
-								},
-								"strict": true
-							},
-							"didYouMean": {
-								"type": "string"
-							}
-						},
-						"strict": true,
-						"optional": true
 					}
 				},
 				"strict": true
@@ -5296,7 +5066,7 @@
 	};
 
 /***/ },
-/* 18 */
+/* 19 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -5314,20 +5084,8 @@
 			},
 			"search": {
 				"properties": {
-					"searchUuid": {},
-					"totalRecordCount": {
-						"type": "integer"
-					},
-					"pageInfo": {
-						"properties": {
-							"recordStart": {
-								"type": "integer"
-							},
-							"recordEnd": {
-								"type": "integer"
-							}
-						},
-						"strict": true
+					"searchId": {
+						"optional": true
 					},
 					"origin": {
 						"properties": {
@@ -5349,162 +5107,6 @@
 							}
 						},
 						"strict": true
-					},
-					"selectedRefinements": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"name": {
-									"optional": true
-								},
-								"displayName": {},
-								"range": {
-									"optional": true
-								},
-								"or": {
-									"optional": false,
-									"def": false
-								},
-								"refinements": {
-									"type": "array",
-									"items": {
-										"type": "object",
-										"properties": {
-											"value": {
-												"optional": true
-											},
-											"count": {
-												"type": "integer"
-											},
-											"type": {},
-											"low": {
-												"type": "number",
-												"optional": true
-											},
-											"high": {
-												"type": "number",
-												"optional": true
-											}
-										},
-										"strict": true
-									}
-								}
-							},
-							"strict": true
-						}
-					},
-					"searchTerm": {},
-					"rawSearchResults": {
-						"properties": {
-							"totalRecordCount": {
-								"type": "integer"
-							},
-							"area": {},
-							"biasingProfile": {},
-							"query": {},
-							"originalQuery": {},
-							"template": {
-								"properties": {
-									"name": {}
-								},
-								"strict": true
-							},
-							"pageInfo": {
-								"properties": {
-									"recordStart": {
-										"type": "integer"
-									},
-									"recordEnd": {
-										"type": "integer"
-									}
-								},
-								"strict": true
-							},
-							"matchStrategy": {
-								"properties": {
-									"rules": {
-										"properties": {
-											"termsGreaterThan": {
-												"type": "integer"
-											},
-											"mustMatch": {
-												"type": "integer"
-											},
-											"percentage": {}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"availableNavigation": {
-								"properties": {
-									"name": {},
-									"displayName": {},
-									"range": {},
-									"or": {},
-									"metadata": {
-										"properties": {
-											"key": {},
-											"name": {}
-										},
-										"strict": true
-									},
-									"refinements": {
-										"properties": {
-											"type": {},
-											"count": {
-												"type": "integer"
-											},
-											"value": {},
-											"high": {},
-											"low": {}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"selectedNavigation": {
-								"properties": {
-									"name": {},
-									"displayName": {},
-									"range": {},
-									"or": {},
-									"metadata": {
-										"properties": {
-											"key": {},
-											"name": {}
-										},
-										"strict": true
-									},
-									"refinements": {
-										"properties": {
-											"name": {},
-											"count": {
-												"type": "integer"
-											},
-											"value": {}
-										},
-										"strict": true
-									}
-								},
-								"strict": true
-							},
-							"records": {
-								"properties": {
-									"allMeta": {},
-									"_id": {},
-									"_u": {},
-									"_t": {}
-								},
-								"strict": true
-							},
-							"didYouMean": {}
-						},
-						"strict": true,
-						"optional": true
 					}
 				},
 				"strict": true
@@ -5665,7 +5267,664 @@
 	};
 
 /***/ },
-/* 19 */
+/* 20 */
+/***/ function(module, exports) {
+
+	module.exports = {
+		"type": "object",
+		"properties": {
+			"eventType": {
+				"type": "string"
+			},
+			"customer": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"area": {
+						"type": "string",
+						"optional": false
+					}
+				},
+				"strict": true
+			},
+			"search": {
+				"type": "object",
+				"properties": {
+					"totalRecordCount": {
+						"type": "integer"
+					},
+					"pageInfo": {
+						"type": "object",
+						"properties": {
+							"recordStart": {
+								"type": "integer"
+							},
+							"recordEnd": {
+								"type": "integer"
+							}
+						},
+						"strict": true
+					},
+					"origin": {
+						"type": "object",
+						"properties": {
+							"sayt": {
+								"type": "boolean",
+								"optional": false
+							},
+							"dym": {
+								"type": "boolean",
+								"optional": false
+							},
+							"search": {
+								"type": "boolean",
+								"optional": false
+							},
+							"wisdom": {
+								"type": "boolean",
+								"optional": false
+							}
+						},
+						"strict": true
+					},
+					"selectedRefinements": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"type": "string",
+									"optional": true
+								},
+								"displayName": {
+									"type": "string"
+								},
+								"range": {
+									"type": "boolean",
+									"optional": true
+								},
+								"or": {
+									"type": "boolean",
+									"optional": false
+								},
+								"refinements": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"value": {
+												"type": "string",
+												"optional": true
+											},
+											"count": {
+												"type": "integer"
+											},
+											"type": {
+												"type": "string"
+											},
+											"low": {
+												"type": "number",
+												"optional": true
+											},
+											"high": {
+												"type": "number",
+												"optional": true
+											}
+										},
+										"strict": true
+									}
+								}
+							},
+							"strict": true
+						}
+					},
+					"searchTerm": {
+						"type": "string"
+					}
+				},
+				"strict": true
+			},
+			"visit": {
+				"type": "object",
+				"properties": {
+					"customerData": {
+						"type": "object",
+						"properties": {
+							"visitorId": {
+								"type": "string",
+								"optional": true
+							},
+							"sessionId": {
+								"type": "string",
+								"optional": true
+							}
+						},
+						"strict": true
+					}
+				},
+				"strict": true
+			},
+			"additionalMetadata": {
+				"optional": true,
+				"strict": true,
+				"properties": {
+					"*": {
+						"type": "string"
+					}
+				}
+			},
+			"rawSearchResults": {
+				"type": "object",
+				"properties": {
+					"totalRecordCount": {
+						"type": "integer",
+						"optional": true
+					},
+					"area": {
+						"type": "string",
+						"optional": true
+					},
+					"biasingProfile": {
+						"type": "string",
+						"optional": true
+					},
+					"query": {
+						"type": "string",
+						"optional": true
+					},
+					"originalQuery": {
+						"type": "string",
+						"optional": true
+					},
+					"template": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"optional": true
+							}
+						},
+						"strict": true,
+						"optional": true
+					},
+					"pageInfo": {
+						"type": "object",
+						"properties": {
+							"recordStart": {
+								"type": "integer",
+								"optional": true
+							},
+							"recordEnd": {
+								"type": "integer",
+								"optional": true
+							}
+						},
+						"strict": true,
+						"optional": true
+					},
+					"matchStrategy": {
+						"type": "object",
+						"properties": {
+							"rules": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"termsGreaterThan": {
+											"type": "integer",
+											"optional": true
+										},
+										"mustMatch": {
+											"type": "integer",
+											"optional": true
+										},
+										"percentage": {
+											"type": "boolean",
+											"optional": true
+										}
+									},
+									"strict": true
+								},
+								"optional": true
+							}
+						},
+						"strict": true,
+						"optional": true
+					},
+					"availableNavigation": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"optional": true
+							},
+							"displayName": {
+								"type": "string",
+								"optional": true
+							},
+							"range": {
+								"type": "boolean",
+								"optional": true
+							},
+							"or": {
+								"type": "boolean",
+								"optional": true
+							},
+							"metadata": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"key": {
+											"type": "string",
+											"optional": true
+										},
+										"name": {
+											"type": "string",
+											"optional": true
+										}
+									},
+									"strict": true
+								},
+								"optional": true
+							},
+							"refinements": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"optional": true
+										},
+										"count": {
+											"type": "integer",
+											"optional": true
+										},
+										"value": {
+											"type": "string",
+											"optional": true
+										},
+										"high": {
+											"type": "string",
+											"optional": true
+										},
+										"low": {
+											"type": "string",
+											"optional": true
+										}
+									},
+									"strict": true
+								},
+								"optional": true
+							}
+						},
+						"strict": true,
+						"optional": true
+					},
+					"selectedNavigation": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"optional": true
+							},
+							"displayName": {
+								"type": "string",
+								"optional": true
+							},
+							"range": {
+								"type": "boolean",
+								"optional": true
+							},
+							"or": {
+								"type": "boolean",
+								"optional": true
+							},
+							"metadata": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"key": {
+											"type": "string",
+											"optional": true
+										},
+										"name": {
+											"type": "string",
+											"optional": true
+										}
+									},
+									"strict": true
+								},
+								"optional": true
+							},
+							"refinements": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"name": {
+											"type": "string",
+											"optional": true
+										},
+										"count": {
+											"type": "integer",
+											"optional": true
+										},
+										"value": {
+											"type": "string",
+											"optional": true
+										}
+									},
+									"strict": true
+								},
+								"optional": true
+							}
+						},
+						"strict": true,
+						"optional": true
+					},
+					"records": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"allMeta": {
+									"type": "object",
+									"optional": true,
+									"strict": false
+								},
+								"_id": {
+									"type": "string",
+									"optional": true
+								},
+								"_u": {
+									"type": "string",
+									"optional": true
+								},
+								"_t": {
+									"type": "string",
+									"optional": true
+								}
+							},
+							"strict": true
+						},
+						"optional": true
+					},
+					"didYouMean": {
+						"type": "string",
+						"optional": true
+					}
+				},
+				"strict": true,
+				"optional": true
+			}
+		},
+		"strict": true
+	};
+
+/***/ },
+/* 21 */
+/***/ function(module, exports) {
+
+	module.exports = {
+		"properties": {
+			"eventType": {},
+			"customer": {
+				"properties": {
+					"id": {},
+					"area": {
+						"optional": false,
+						"def": "default"
+					}
+				},
+				"strict": true
+			},
+			"search": {
+				"properties": {
+					"totalRecordCount": {
+						"type": "integer"
+					},
+					"pageInfo": {
+						"properties": {
+							"recordStart": {
+								"type": "integer"
+							},
+							"recordEnd": {
+								"type": "integer"
+							}
+						},
+						"strict": true
+					},
+					"origin": {
+						"properties": {
+							"sayt": {
+								"optional": false,
+								"def": false
+							},
+							"dym": {
+								"optional": false,
+								"def": false
+							},
+							"search": {
+								"optional": false,
+								"def": false
+							},
+							"wisdom": {
+								"optional": false,
+								"def": false
+							}
+						},
+						"strict": true
+					},
+					"selectedRefinements": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"optional": true
+								},
+								"displayName": {},
+								"range": {
+									"optional": true
+								},
+								"or": {
+									"optional": false,
+									"def": false
+								},
+								"refinements": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"value": {
+												"optional": true
+											},
+											"count": {
+												"type": "integer"
+											},
+											"type": {},
+											"low": {
+												"type": "number",
+												"optional": true
+											},
+											"high": {
+												"type": "number",
+												"optional": true
+											}
+										},
+										"strict": true
+									}
+								}
+							},
+							"strict": true
+						}
+					},
+					"searchTerm": {}
+				},
+				"strict": true
+			},
+			"visit": {
+				"properties": {
+					"customerData": {
+						"properties": {
+							"visitorId": {},
+							"sessionId": {}
+						},
+						"strict": true
+					}
+				},
+				"strict": true
+			},
+			"additionalMetadata": {
+				"optional": true
+			},
+			"rawSearchResults": {
+				"properties": {
+					"totalRecordCount": {
+						"type": "integer"
+					},
+					"area": {},
+					"biasingProfile": {},
+					"query": {},
+					"originalQuery": {},
+					"template": {
+						"properties": {
+							"name": {}
+						},
+						"strict": true
+					},
+					"pageInfo": {
+						"properties": {
+							"recordStart": {
+								"type": "integer"
+							},
+							"recordEnd": {
+								"type": "integer"
+							}
+						},
+						"strict": true
+					},
+					"matchStrategy": {
+						"properties": {
+							"rules": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"termsGreaterThan": {
+											"type": "integer"
+										},
+										"mustMatch": {
+											"type": "integer"
+										},
+										"percentage": {}
+									},
+									"strict": true
+								}
+							}
+						},
+						"strict": true
+					},
+					"availableNavigation": {
+						"properties": {
+							"name": {},
+							"displayName": {},
+							"range": {},
+							"or": {},
+							"metadata": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"key": {},
+										"name": {}
+									},
+									"strict": true
+								}
+							},
+							"refinements": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"type": {},
+										"count": {
+											"type": "integer"
+										},
+										"value": {},
+										"high": {},
+										"low": {}
+									},
+									"strict": true
+								}
+							}
+						},
+						"strict": true
+					},
+					"selectedNavigation": {
+						"properties": {
+							"name": {},
+							"displayName": {},
+							"range": {},
+							"or": {},
+							"metadata": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"key": {},
+										"name": {}
+									},
+									"strict": true
+								}
+							},
+							"refinements": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"name": {},
+										"count": {
+											"type": "integer"
+										},
+										"value": {}
+									},
+									"strict": true
+								}
+							}
+						},
+						"strict": true
+					},
+					"records": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"allMeta": {
+									"strict": false
+								},
+								"_id": {},
+								"_u": {},
+								"_t": {}
+							},
+							"strict": true
+						}
+					},
+					"didYouMean": {}
+				},
+				"strict": true
+			}
+		},
+		"strict": true
+	};
+
+/***/ },
+/* 22 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -5741,7 +6000,7 @@
 	};
 
 /***/ },
-/* 20 */
+/* 23 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -5790,7 +6049,7 @@
 	};
 
 /***/ },
-/* 21 */
+/* 24 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -5880,7 +6139,7 @@
 	};
 
 /***/ },
-/* 22 */
+/* 25 */
 /***/ function(module, exports) {
 
 	module.exports = {
