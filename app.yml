@@ -1,3 +1,4 @@
+service: cdn
 runtime: python27
 api_version: 1
 threadsafe: false
@@ -8,7 +9,11 @@ handlers:
     upload: static/index.html
 
   - url: /dist/.*
-    script: redirect.py
+    script: redirect.app
+
+  - url: /(.*?)/(.*)
+    static_files: projects/\1/static/\2
+    upload: (.*?)/(.*)
 
   - url: /(.*\.js(\.map)?)
     static_files: static/javascript/\1
@@ -21,3 +26,7 @@ handlers:
   - url: /.*
     static_files: static/404.html
     upload: static/404.html
+
+libraries:
+- name: webapp2
+  version: latest
