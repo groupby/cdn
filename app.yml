@@ -7,6 +7,9 @@ handlers:
     static_files: static/index.html
     upload: static/index.html
 
+  - url: /dist/.*
+    script: redirect.py
+
   - url: /(.*\.js(\.map)?)
     static_files: static/javascript/\1
     upload: static/(.*\.js(\.map)?)
