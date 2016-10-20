@@ -3,29 +3,46 @@ runtime: python27
 api_version: 1
 threadsafe: false
 
+default_expiration: "30d"
+
 handlers:
   - url: /
     static_files: static/index.html
     upload: static/index.html
+    mime_type: text/html; charset=UTF-8
 
   - url: /dist/.*
     script: redirect.app
 
-  - url: /(.*?)/(.*)
+  - url: /(.*?)/(.*\.js)
     static_files: projects/\1/static/\2
-    upload: (.*?)/(.*)
+    upload: (.*?)/(.*\.js)
+    mime_type: application/javascript; charset=UTF-8
+
+  - url: /(.*?)/(.*\.html)
+    static_files: projects/\1/static/\2
+    upload: (.*?)/(.*\.html)
+    mime_type: text/html; charset=UTF-8
+
+  - url: /(.*?)/(.*\.css)
+    static_files: projects/\1/static/\2
+    upload: (.*?)/(.*\.css)
+    mime_type: text/css; charset=UTF-8
 
   - url: /(.*\.js(\.map)?)
     static_files: static/javascript/\1
     upload: static/(.*\.js(\.map)?)
+    mime_type: application/javascript; charset=UTF-8
 
   - url: /(.*\.css)
     static_files: static/css/\1
     upload: static/(.*\.css)
+    mime_type: text/css; charset=UTF-8
 
   - url: /.*
     static_files: static/404.html
     upload: static/404.html
+    mime_type: text/html; charset=UTF-8
 
 libraries:
 - name: webapp2
