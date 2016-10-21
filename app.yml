@@ -14,23 +14,8 @@ handlers:
     upload: static/(.*\.js(\.map)?)
     mime_type: application/javascript; charset=UTF-8
 
-  - url: /(.*?)/(.*\.js)
-    static_files: projects/\1/static/\2
-    upload: (.*?)/(.*\.js)
-    mime_type: application/javascript; charset=UTF-8
-    expiration: "0d 5m"
-
-  - url: /(.*?)/(.*\.html)
-    static_files: projects/\1/static/\2
-    upload: (.*?)/(.*\.html)
-    mime_type: text/html; charset=UTF-8
-    expiration: "0d 5m"
-
-  - url: /(.*?)/(.*\.css)
-    static_files: projects/\1/static/\2
-    upload: (.*?)/(.*\.css)
-    mime_type: text/css; charset=UTF-8
-    expiration: "0d 5m"
+  - url: /(.*?)/(.*)
+    script: dynamic_files.app
 
   - url: /(.*\.js(\.map)?)
     static_files: static/javascript/\1
