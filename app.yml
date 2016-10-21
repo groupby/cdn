@@ -3,8 +3,6 @@ runtime: python27
 api_version: 1
 threadsafe: false
 
-default_expiration: "30d"
-
 handlers:
   - url: /
     static_files: static/index.html
