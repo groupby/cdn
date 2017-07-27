@@ -7,12 +7,12 @@ done
 gcloud="${HOME}/google-cloud-sdk/bin/gcloud"
 
 $gcloud -q beta app deploy app.yml --promote --project=$GCLOUD_PROJECT --verbosity=info
-get_versions="$gcloud beta app versions list --project=$GCLOUD_PROJECT --filter service=cdn --sort-by Version | tail -n +2"
-version_count=`$get_versions | wc -l | awk '{ print $1; }'`
+get_versions="$gcloud beta app versions list --project=$GCLOUD_PROJECT --filter service=cdn --sort-by Version"
+version_count=`$get_versions | tail -n +2 | wc -l | awk '{ print $1; }'`
 to_delete=`expr $version_count - 25`
 
 echo "found existing versions"
-$get_versions
+$get_versions | tail -n +2
 echo "$to_delete/$version_count versions can be deleted"
 
 # if [ "$to_delete" -gt 0 ]; then
