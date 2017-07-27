@@ -8,7 +8,7 @@ gcloud="${HOME}/google-cloud-sdk/bin/gcloud"
 
 $gcloud -q beta app deploy app.yml --promote --project=$GCLOUD_PROJECT --verbosity=info
 all_versions=`$gcloud beta app versions list --project=$GCLOUD_PROJECT --filter service=cdn --sort-by Version | tail -n +2`
-version_count=`echo $all_versions | wc -l`
+version_count=`echo $all_versions | grep -c '^'`
 to_delete=`expr $version_count - 25`
 
 echo "found existing versions"
