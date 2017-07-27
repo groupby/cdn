@@ -4,4 +4,14 @@ for proj in ${projects}; do
   git clone "https://github.com/groupby/${proj}.git" projects/${proj}
 done
 
-${HOME}/google-cloud-sdk/bin/gcloud -q beta app deploy app.yml --promote --project=$GCLOUD_PROJECT --verbosity=info
+gcloud="${HOME}/google-cloud-sdk/bin/gcloud"
+
+$gcloud -q beta app deploy app.yml --promote --project=$GCLOUD_PROJECT --verbosity=info
+versions=`$gcloud -q beta app versions list --filter=service=cdn --sort-by=Version | tail -n +2 | awk '{ print $2; }'`
+total_versions=`echo $versions | wc -l`
+to_delete=`echo "$total_versions - 25" | bc`
+
+if [ "$to_delete" -gt 0 ]; then
+  versions_arr=`echo $versions | tr '\n' ' '`
+  $gcloud -q beta app delete $versions_arr --service=cdn
+fi
