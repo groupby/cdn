@@ -16,5 +16,5 @@ echo "$to_delete/$version_count versions can be deleted"
 if [ "$to_delete" -gt 0 ]; then
   echo "removing old versions of CDN"
   versions=`$get_versions | tail -n +2 | head -n $to_delete | awk '{ print $2; }' | tr '\n' ' '`
-  $gcloud beta app delete $versions --project=$GCLOUD_PROJECT --service=cdn
+  $gcloud beta app versions delete $versions --project=$GCLOUD_PROJECT --service=cdn
 fi
