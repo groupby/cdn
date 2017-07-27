@@ -11,7 +11,8 @@ all_versions=`$gcloud beta app versions list --project=$GCLOUD_PROJECT --filter 
 version_count=`echo $all_versions | wc -l`
 to_delete=`expr $version_count - 25`
 
-echo "found $version_count existing versions"
+echo "found existing versions"
+echo "$all_versions"
 echo "$to_delete/$version_count versions can be deleted"
 
 # if [ "$to_delete" -gt 0 ]; then
