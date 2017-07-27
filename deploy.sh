@@ -11,12 +11,10 @@ get_versions="$gcloud beta app versions list --project=$GCLOUD_PROJECT --filter 
 version_count=`$get_versions | tail -n +2 | wc -l | awk '{ print $1; }'`
 to_delete=`expr $version_count - 25`
 
-echo "found existing versions"
-$get_versions | tail -n +2
 echo "$to_delete/$version_count versions can be deleted"
 
-# if [ "$to_delete" -gt 0 ]; then
-#   echo "removing old versions of CDN"
-#   versions=`echo $all_versions | head -n $to_delete | awk '{ print $2; }' | tr '\n' ' '`
-#   $gcloud beta app delete $versions --project=$GCLOUD_PROJECT --service=cdn
-# fi
+if [ "$to_delete" -gt 0 ]; then
+  echo "removing old versions of CDN"
+  versions=`$get_versions | tail -n +2 | head -n $to_delete | awk '{ print $2; }' | tr '\n' ' '`
+  $gcloud beta app delete $versions --project=$GCLOUD_PROJECT --service=cdn
+fi
