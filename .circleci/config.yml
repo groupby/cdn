@@ -1,0 +1,11 @@
+version: 2
+jobs:
+  build:
+    docker:
+    - image: groupbyinc/cdn-deployment:latest
+    working_directory: /workspace
+    environment:
+      GCLOUD_PROJECT: 'groupby-cloud-1701'
+    steps:
+    - checkout
+    - run: deploy.sh
