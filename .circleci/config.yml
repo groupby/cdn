@@ -1,6 +1,13 @@
 version: 2
+
+main_branch_only: &main_branch_only
+  filters:
+    branches:
+      only:
+        - develop
+
 jobs:
-  build:
+  deploy:
     docker:
     - image: groupbyinc/cdn-deployment:latest
     working_directory: /workspace
@@ -9,3 +16,11 @@ jobs:
     steps:
     - checkout
     - run: deploy.sh
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+    - deploy:
+        <<: *main_branch_only
+        context: org-global
