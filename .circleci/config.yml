@@ -4,7 +4,7 @@ main_branch_only: &main_branch_only
   filters:
     branches:
       only:
-        - develop
+        - master
 
 jobs:
   deploy:
