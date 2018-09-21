@@ -5,11 +5,12 @@ main_branch_only: &main_branch_only
     branches:
       only:
         - master
+        - gzip
 
 jobs:
   deploy:
     docker:
-    - image: groupbyinc/cdn-deployment:latest
+    - image: groupbyinc/cdn-deployment:gzip
     working_directory: /workspace
     environment:
       GCLOUD_PROJECT: 'groupby-cloud-1701'
