@@ -10,7 +10,7 @@ main_branch_only: &main_branch_only
 jobs:
   deploy:
     docker:
-    - image: groupbyinc/cdn-deployment:gzip
+    - image: groupbyinc/cdn-deployment:gzip-refactor
     working_directory: /workspace
     environment:
       GCLOUD_PROJECT: 'groupby-cloud-1701'
