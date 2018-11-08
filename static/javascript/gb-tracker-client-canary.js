@@ -3820,7 +3820,7 @@ var TrackerFactory = function TrackerFactory(__schemas__, __sanitizeEvent__) {
       sanitizedEvent.visit.generated.localTime = new Date().toISOString();
 
       if (document && document.referrer) {
-        sanitizedEvent.visit.generated.referrer = document.referrer;
+        sanitizedEvent.visit.generated.referer = document.referrer;
       }
 
       return { event: sanitizedEvent };
