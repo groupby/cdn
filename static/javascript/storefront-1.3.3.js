@@ -287,4 +287,4 @@ var r=n(67),o=n(204);e.exports=function(e,t,n){var i=o(t,n),a={};return r(e,func
 - `@storefront/structure`: 1.44.0
 - `@storefront/template`: 1.33.0
 */
-//# sourceMappingURL=storefront-canary.map.js
+//# sourceMappingURL=storefront-1.3.3.map.js
