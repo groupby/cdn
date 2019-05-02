@@ -237,7 +237,7 @@ eval("\n\nObject.defineProperty(exports, \"__esModule\", {\n  value: true\n});\n
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
-eval("\n\nObject.defineProperty(exports, \"__esModule\", {\n  value: true\n});\nexports.version = \"0.0.0-apr30\";\n\n//# sourceURL=webpack:///./dist/version.js?");
+eval("\n\nObject.defineProperty(exports, \"__esModule\", {\n  value: true\n});\nexports.version = \"3.7.0\";\n\n//# sourceURL=webpack:///./dist/version.js?");
 
 /***/ }),
 
