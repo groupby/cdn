@@ -19426,17 +19426,6 @@ exports.SaytDriverPlugin = sayt_driver_plugin_1.default;
 
 "use strict";
 
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Driver plugin that serves as the link between the Sayt data source
@@ -19502,16 +19491,18 @@ var SaytDriverPlugin = /** @class */ (function () {
         this.core[this.eventsPluginName].unregisterListener(this.saytDataEvent, this.fetchSaytData);
     };
     /**
-     * Dispatches an event with the response from the sayt data plugin.
+     * Dispatches an event with the response from the sayt data
+     * plugin and the associated searchbox ID.
      * Callback for the Sayt data request event listener.
      *
      * @param event Event that contains the Sayt API request payload.
      */
     SaytDriverPlugin.prototype.fetchSaytData = function (event) {
         var _this = this;
-        this.sendSaytApiRequest(event.detail)
-            .then(function (data) {
-            _this.core[_this.eventsPluginName].dispatchEvent(_this.saytResponseEvent, data);
+        var _a = event.detail, query = _a.query, searchbox = _a.searchbox, config = _a.config;
+        this.sendSaytApiRequest(query, config)
+            .then(function (results) {
+            _this.core[_this.eventsPluginName].dispatchEvent(_this.saytResponseEvent, { results: results, searchbox: searchbox });
         })
             .catch(function (e) {
             _this.core[_this.eventsPluginName].dispatchEvent(_this.saytErrorEvent, e);
@@ -19520,12 +19511,12 @@ var SaytDriverPlugin = /** @class */ (function () {
     /**
      * Sends a request to the SAYT API with the given query and config object.
      *
-     * @param saytDataQuery Request object received from the event listener.
+     * @param query The search term to send.
+     * @param config Extra query-time configuration to customize the SAYT request.
      * @returns A promise from the Sayt API that has been reformatted
      * with the passed callback.
      */
-    SaytDriverPlugin.prototype.sendSaytApiRequest = function (_a) {
-        var query = _a.query, config = __rest(_a, ["query"]);
+    SaytDriverPlugin.prototype.sendSaytApiRequest = function (query, config) {
         return this.core.sayt.autocomplete(query, config).then(this.autocompleteCallback);
     };
     /**
