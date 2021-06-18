@@ -1,0 +1,46 @@
+{
+    "requests": {
+        "pageview": "https://${customerId}${domainNameCustomerIdSuffix}.groupbycloud.com/api/v1/beacons/amp/gbi-event-addToCart-amp"
+    },
+    "vars": {
+        "gbiVisitorId": "${clientId(gbi_visitorId)}"
+    },
+    "triggers": {
+        "trackPageview": {
+            "on": "visible",
+            "request": "pageview"
+        }
+    },
+    "transport": {
+        "beacon": false,
+        "xhrpost": true,
+        "image": false,
+        "useBody": true
+    },
+    "extraUrlParams": {
+        "ampConfigVersion": "1.0.0",
+        "visitorId": "${gbiVisitorId}",
+        "userAgent": "${userAgent}",
+        "browserLanguage": "${browserLanguage}",
+        "timestamp": "${timestamp}",
+        "timezone": "${timezone}",
+        "sourceUrl": "${sourceUrl}",
+        "documentReferrer": "${documentReferrer}",
+        "customerId": "${customerId}"
+    },
+    "linkers": {
+        "gbi": {
+            "ids": {
+                "gbivid": "${gbiVisitorId}"
+            },
+            "proxyOnly": false
+        },
+        "enabled": true
+    },
+    "cookies": {
+        "enabled": true,
+        "gbi_visitorId": {
+            "value": "LINKER_PARAM(gbi, gbivid)"
+        }
+    }
+}
